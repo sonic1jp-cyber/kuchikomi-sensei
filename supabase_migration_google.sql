@@ -4,6 +4,7 @@
 -- clinics テーブルに Google OAuth トークンを保存するカラムを追加
 
 ALTER TABLE clinics
+  ADD COLUMN IF NOT EXISTS google_review_url TEXT,
   ADD COLUMN IF NOT EXISTS google_access_token TEXT,
   ADD COLUMN IF NOT EXISTS google_refresh_token TEXT,
   ADD COLUMN IF NOT EXISTS google_token_expires_at TIMESTAMPTZ,
@@ -17,6 +18,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_google_review_id
   WHERE google_review_id IS NOT NULL;
 
 -- コメント
+COMMENT ON COLUMN clinics.google_review_url IS 'Google口コミ投稿画面の直リンクURL';
 COMMENT ON COLUMN clinics.google_access_token IS 'Google Business Profile API のアクセストークン';
 COMMENT ON COLUMN clinics.google_refresh_token IS 'Google Business Profile API のリフレッシュトークン';
 COMMENT ON COLUMN clinics.google_token_expires_at IS 'アクセストークンの有効期限';

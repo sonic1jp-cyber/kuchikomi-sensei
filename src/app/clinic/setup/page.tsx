@@ -12,6 +12,7 @@ export default function ClinicSetupPage() {
   const [department, setDepartment] = useState('');
   const [address, setAddress] = useState('');
   const [googleMapsUrl, setGoogleMapsUrl] = useState('');
+  const [googleReviewUrl, setGoogleReviewUrl] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,6 +34,7 @@ export default function ClinicSetupPage() {
         department,
         address,
         google_maps_url: googleMapsUrl || null,
+        google_review_url: googleReviewUrl || null,
       });
 
       if (insertError) {
@@ -124,14 +126,39 @@ export default function ClinicSetupPage() {
                 className="w-full border border-gray-300 rounded-lg py-2 px-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Google マップで施設を検索し、共有URLを貼り付けてください
+                Googleマップで施設を検索し、共有URLを貼り付けてください
               </p>
+            </div>
+
+            <div>
+              <label htmlFor="googleReviewUrl" className="block text-sm font-medium text-gray-700 mb-1">
+                Google口コミ投稿URL <span className="text-blue-500 text-xs font-normal">（推奨）</span>
+              </label>
+              <input
+                id="googleReviewUrl"
+                type="url"
+                value={googleReviewUrl}
+                onChange={(e) => setGoogleReviewUrl(e.target.value)}
+                placeholder="https://search.google.com/local/writereview?placeid=..."
+                className="w-full border border-gray-300 rounded-lg py-2 px-3 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              <div className="text-xs text-gray-500 mt-1 space-y-1">
+                <p>患者様がタップすると口コミ入力画面が直接開くURLです。</p>
+                <details className="cursor-pointer">
+                  <summary className="text-blue-600 hover:text-blue-800">取得方法を見る</summary>
+                  <div className="mt-2 p-3 bg-gray-50 rounded-lg space-y-1">
+                    <p>1. Googleマップでクリニックを検索</p>
+                    <p>2. 「クチコミを書く」ボタンが表示されるページのURLをコピー</p>
+                    <p>3. または Google ビジネスプロフィールの管理画面から「クチコミのリンクを取得」</p>
+                  </div>
+                </details>
+              </div>
             </div>
 
             <button
               type="submit"
               disabled={isLoading || !name}
-              className="w-full bg-blue-600 text-white rounded-lg py-3 px-4 font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-blue-600 text-white rounded-lg py-3 px-4 font-medium hover:bg-blue-700 transition-all active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? '登録中...' : '登録してはじめる'}
             </button>

@@ -8,6 +8,7 @@ interface Clinic {
   id: string;
   name: string;
   google_maps_url: string | null;
+  google_review_url: string | null;
 }
 
 type RatingPhase = 'select' | 'feedback' | 'complete';
@@ -30,7 +31,7 @@ export default function ReviewPage() {
         const supabase = createClient();
         const { data, error } = await supabase
           .from('clinics')
-          .select('id, name, google_maps_url')
+          .select('id, name, google_maps_url, google_review_url')
           .eq('id', clinicId)
           .single();
 
@@ -82,12 +83,15 @@ export default function ReviewPage() {
     }
   };
 
-  // Google Maps URL: 登録済みURLがあればそれを使い、なければクリニック名検索
-  const googleMapsUrl = clinic?.google_maps_url
-    ? clinic.google_maps_url
-    : clinic?.name
-      ? `https://www.google.com/maps/search/${encodeURIComponent(clinic.name)}`
-      : '';
+  // Google 誘導URL: 口コミ投稿URL > Google Maps URL > クリニック名検索
+  // 口コミ投稿URLがあれば直接投稿画面に飛ばす
+  const googleMapsUrl = clinic?.google_review_url
+    ? clinic.google_review_url
+    : clinic?.google_maps_url
+      ? clinic.google_maps_url
+      : clinic?.name
+        ? `https://www.google.com/maps/search/${encodeURIComponent(clinic.name)}`
+        : '';
 
   // --- エラー画面 ---
   if (error && !clinic) {
@@ -221,9 +225,9 @@ export default function ReviewPage() {
                     setFeedbackText('');
                     setError(null);
                   }}
-                  className="w-full py-2 px-4 text-gray-500 text-sm hover:text-gray-700 transition-colors"
+                  className="w-full py-2 px-4 text-gray-500 text-sm hover:text-gray-700 transition-all active:scale-95 active:bg-gray-100 rounded-lg"
                 >
-                  戻る
+                  ← 戻る
                 </button>
               </div>
             )}
