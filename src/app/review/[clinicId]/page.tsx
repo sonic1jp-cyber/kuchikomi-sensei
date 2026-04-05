@@ -3,11 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
-import { StarRating } from '@/components/StarRating';
 
 interface Clinic {
   id: string;
   name: string;
+  google_maps_url: string | null;
 }
 
 type RatingPhase = 'select' | 'feedback' | 'complete';
@@ -29,7 +29,7 @@ export default function ReviewPage() {
         const supabase = createClient();
         const { data, error } = await supabase
           .from('clinics')
-          .select('id, name')
+          .select('id, name, google_maps_url')
           .eq('id', clinicId)
           .single();
 
@@ -48,14 +48,8 @@ export default function ReviewPage() {
 
   const handleRatingSelect = (rating: number) => {
     setSelectedRating(rating);
-
-    if (rating >= 4) {
-      // 高評価の場合は直接Google Mapsへ
-      setPhase('complete');
-    } else {
-      // 低評価の場合はフィードバック
-      setPhase('feedback');
-    }
+    // 全評価でフィードバック画面へ（レビューゲーティングを避ける）
+    setPhase('feedback');
   };
 
   const handleSubmitFeedback = async () => {
@@ -80,9 +74,17 @@ export default function ReviewPage() {
     }
   };
 
-  const googleMapsUrl = clinic?.name
-    ? `https://www.google.com/maps/search/${encodeURIComponent(clinic.name)}`
-    : '';
+  const handleSkipToGoogle = () => {
+    // フィードバックなしでGoogle誘導（全評価で可能）
+    setPhase('complete');
+  };
+
+  // Google Maps URL: 登録済みURLがあればそれを使う、なければクリニック名検索
+  const googleMapsUrl = clinic?.google_maps_url
+    ? clinic.google_maps_url
+    : clinic?.name
+      ? `https://www.google.com/maps/search/${encodeURIComponent(clinic.name)}`
+      : '';
 
   if (error && !clinic) {
     return (
@@ -157,9 +159,22 @@ export default function ReviewPage() {
               <div className="space-y-4">
                 <div>
                   <p className="text-center text-gray-700 font-medium mb-3">
-                    ご意見・ご要望をお聞かせください
+                    {selectedRating >= 4
+                      ? 'ありがとうございます！よろしければご意見もお聞かせください'
+                      : 'ご意見・ご要望をお聞かせください'}
                   </p>
-                  <StarRating rating={selectedRating} />
+                  <div className="flex justify-center gap-1 mb-4">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <svg
+                        key={star}
+                        className={`w-6 h-6 ${star <= selectedRating ? 'text-yellow-400' : 'text-gray-300'}`}
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                    ))}
+                  </div>
                 </div>
 
                 {error && (
@@ -183,6 +198,16 @@ export default function ReviewPage() {
                   >
                     {isSubmitting ? '送信中...' : 'ご意見を送信'}
                   </button>
+
+                  {selectedRating >= 4 && (
+                    <button
+                      onClick={handleSkipToGoogle}
+                      className="w-full py-2 px-4 text-blue-600 bg-white border border-blue-300 rounded-lg font-medium hover:bg-blue-50 transition-colors text-sm"
+                    >
+                      スキップして Google に口コミを書く
+                    </button>
+                  )}
+
                   <button
                     onClick={() => {
                       setPhase('select');
@@ -216,33 +241,26 @@ export default function ReviewPage() {
                   </svg>
                 </div>
 
-                {selectedRating >= 4 ? (
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900 mb-2">
-                      ありがとうございます
-                    </h2>
-                    <p className="text-gray-600 mb-4">
-                      Google で{clinic.name}に口コミをお寄せください
-                    </p>
-                    <a
-                      href={googleMapsUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="w-full block py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-center"
-                    >
-                      Google で口コミを投稿する
-                    </a>
-                  </div>
-                ) : (
-                  <div>
-                    <h2 className="text-lg font-bold text-gray-900 mb-2">
-                      ご意見をいただきありがとうございました
-                    </h2>
-                    <p className="text-gray-600">
-                      貴重なご意見は、診療の向上に活用させていただきます
-                    </p>
-                  </div>
-                )}
+                {/* 全評価でGoogle口コミリンクを表示（レビューゲーティングしない） */}
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">
+                    ありがとうございます！
+                  </h2>
+                  <p className="text-gray-600 mb-4">
+                    よろしければ Google でも口コミをお寄せください
+                  </p>
+                  <a
+                    href={googleMapsUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full block py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors text-center"
+                  >
+                    Google で口コミを投稿する
+                  </a>
+                  <p className="text-xs text-gray-400 mt-3">
+                    口コミの投稿は任意です
+                  </p>
+                </div>
               </div>
             )}
           </div>

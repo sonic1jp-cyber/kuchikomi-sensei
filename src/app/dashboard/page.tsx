@@ -28,43 +28,58 @@ async function getClinicData(userId: string): Promise<{
     }};
   }
 
-  // レビューを取得
-  const { data: reviewsData, error: reviewsError } = await supabase
+  // Google レビュー（reviews テーブル）を取得
+  const { data: reviewsData } = await supabase
     .from('reviews')
     .select('*')
     .eq('clinic_id', clinicData.id)
     .order('published_at', { ascending: false });
 
-  if (reviewsError || !reviewsData) {
-    return { clinic: clinicData, reviews: [], stats: {
-      totalReviews: 0,
-      averageRating: 0,
-      unrepliedCount: 0,
-      thisMonthCount: 0,
-      ratingDistribution: [],
-      monthlyTrend: [],
-    }};
-  }
+  // 院内フィードバック（feedbacks テーブル）を取得
+  const { data: feedbacksData } = await supabase
+    .from('feedbacks')
+    .select('*')
+    .eq('clinic_id', clinicData.id)
+    .order('created_at', { ascending: false });
 
-  const reviews = reviewsData as Review[];
+  // feedbacks を reviews と同じ形式に変換して統合
+  const googleReviews: Review[] = (reviewsData || []) as Review[];
+  const feedbackReviews: Review[] = (feedbacksData || []).map((fb: any) => ({
+    id: fb.id,
+    clinic_id: fb.clinic_id,
+    google_review_id: null,
+    author_name: '院内フィードバック',
+    rating: fb.rating,
+    text: fb.comment || '',
+    published_at: fb.created_at,
+    reply_text: null,
+    replied_at: null,
+    is_flagged: fb.rating <= 2,
+    created_at: fb.created_at,
+  }));
+
+  // 統合して日付順にソート
+  const allReviews = [...googleReviews, ...feedbackReviews].sort(
+    (a, b) => new Date(b.published_at).getTime() - new Date(a.published_at).getTime()
+  );
 
   // 統計情報を計算
-  const totalReviews = reviews.length;
+  const totalReviews = allReviews.length;
   const averageRating =
     totalReviews > 0
-      ? reviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews
+      ? allReviews.reduce((sum, r) => sum + r.rating, 0) / totalReviews
       : 0;
-  const unrepliedCount = reviews.filter((r) => !r.replied_at).length;
+  const unrepliedCount = allReviews.filter((r) => !r.replied_at).length;
 
   const now = new Date();
   const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const thisMonthCount = reviews.filter(
+  const thisMonthCount = allReviews.filter(
     (r) => new Date(r.published_at) >= thisMonthStart
   ).length;
 
   const ratingDistribution = [1, 2, 3, 4, 5].map((rating) => ({
     rating,
-    count: reviews.filter((r) => r.rating === rating).length,
+    count: allReviews.filter((r) => r.rating === rating).length,
   }));
 
   // 月別トレンド（過去6ヶ月）
@@ -74,7 +89,7 @@ async function getClinicData(userId: string): Promise<{
     const monthStart = new Date(d.getFullYear(), d.getMonth(), 1);
     const monthEnd = new Date(d.getFullYear(), d.getMonth() + 1, 0);
 
-    const monthReviews = reviews.filter((r) => {
+    const monthReviews = allReviews.filter((r) => {
       const rDate = new Date(r.published_at);
       return rDate >= monthStart && rDate <= monthEnd;
     });
@@ -98,7 +113,7 @@ async function getClinicData(userId: string): Promise<{
     monthlyTrend,
   };
 
-  return { clinic: clinicData as Clinic, reviews, stats };
+  return { clinic: clinicData as Clinic, reviews: allReviews, stats };
 }
 
 export default async function DashboardPage() {
@@ -112,7 +127,6 @@ export default async function DashboardPage() {
   const { clinic, reviews, stats } = await getClinicData(session.user.id);
 
   if (!clinic) {
-    // TODO: クリニック登録ページへリダイレクト
     redirect('/clinic/setup');
   }
 
