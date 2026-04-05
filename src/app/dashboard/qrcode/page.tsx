@@ -1,212 +1,298 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
 import { QRCodeCanvas } from 'qrcode.react';
 
-interface QRCodeDisplayProps {
-  url: string;
-}
-
-function QRCodeDisplay({ url }: QRCodeDisplayProps) {
-  return (
-    <div className="bg-white p-8 rounded-lg border-2 border-gray-200 flex items-center justify-center">
-      <QRCodeCanvas value={url} size={256} level="H" includeMargin />
-    </div>
-  );
+interface ClinicData {
+  id: string;
+  name: string;
+  google_maps_url: string | null;
 }
 
 export default function QRCodePage() {
   const router = useRouter();
-  const [googleMapsUrl, setGoogleMapsUrl] = useState('');
-  const [qrUrl, setQrUrl] = useState<string | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
+  const [clinic, setClinic] = useState<ClinicData | null>(null);
+  const [reviewUrl, setReviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [copied, setCopied] = useState(false);
 
-  const handleGenerateQR = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
+  // ページ読み込み時に自動でQRコードを生成
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { session } } = await supabase.auth.getSession();
 
-      // Google Maps URL のバリデーション（google.co.jp/maps, maps.app.goo.gl 等も許可）
-      const isValidGoogleMapsUrl =
-        googleMapsUrl.includes('google.com/maps') ||
-        googleMapsUrl.includes('google.co.jp/maps') ||
-        googleMapsUrl.includes('maps.google.com') ||
-        googleMapsUrl.includes('maps.google.co.jp') ||
-        googleMapsUrl.includes('goo.gl/maps') ||
-        googleMapsUrl.includes('maps.app.goo.gl');
+        if (!session) {
+          router.push('/login');
+          return;
+        }
 
-      if (!isValidGoogleMapsUrl) {
-        setError('有効な Google Maps URL を入力してください（例: https://www.google.co.jp/maps/...）');
-        return;
+        const { data: clinicData, error: clinicError } = await supabase
+          .from('clinics')
+          .select('id, name, google_maps_url')
+          .eq('user_id', session.user.id)
+          .single();
+
+        if (clinicError || !clinicData) {
+          setError('クリニック情報が見つかりません');
+          return;
+        }
+
+        setClinic(clinicData);
+
+        // レビューページURLを自動生成
+        const baseUrl = window.location.origin;
+        setReviewUrl(`${baseUrl}/review/${clinicData.id}`);
+      } catch (err) {
+        setError('データの取得に失敗しました');
+        console.error(err);
+      } finally {
+        setIsLoading(false);
       }
+    };
 
-      // クリニック ID を取得
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
+    init();
+  }, [router]);
 
-      if (!session) {
-        router.push('/login');
-        return;
-      }
-
-      const { data: clinic } = await supabase
-        .from('clinics')
-        .select('id')
-        .eq('user_id', session.user.id)
-        .single();
-
-      if (!clinic) {
-        setError('クリニック情報が見つかりません');
-        return;
-      }
-
-      // QR コード URL を生成
-      const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
-      const reviewUrl = `${baseUrl}/review/${clinic.id}`;
-
-      setQrUrl(reviewUrl);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'エラーが発生しました');
-    } finally {
-      setIsLoading(false);
-    }
+  const handleCopy = async () => {
+    if (!reviewUrl) return;
+    await navigator.clipboard.writeText(reviewUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  const handlePrintPDF = () => {
-    // TODO: QR コード印刷用 PDF 生成
+  const handlePrint = () => {
     window.print();
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      {/* ヘッダー */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center gap-4">
+  // --- ローディング ---
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-gray-500">読み込み中...</p>
+      </div>
+    );
+  }
+
+  // --- エラー ---
+  if (error || !clinic || !reviewUrl) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 py-4 flex items-center gap-4">
             <button
               onClick={() => router.push('/dashboard')}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors active:scale-95"
             >
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <h1 className="text-2xl font-bold text-gray-900">QR コード生成</h1>
+            <h1 className="text-2xl font-bold text-gray-900">QR コード</h1>
           </div>
-        </div>
-      </header>
-
-      {/* メインコンテンツ */}
-      <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow p-8">
-          <div className="space-y-6">
-            {/* 説明 */}
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h2 className="font-semibold text-blue-900 mb-2">
-                患者様向けの QR コードを生成
-              </h2>
-              <p className="text-sm text-blue-800">
-                このQRコードを院内に掲示することで、患者様が簡単に評価を投稿できます
+        </header>
+        <main className="max-w-2xl mx-auto px-4 py-8">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+            <p className="text-red-700">{error || 'クリニック情報がありません'}</p>
+            {!clinic?.google_maps_url && (
+              <p className="text-red-600 text-sm mt-2">
+                クリニック設定で Google Maps URL を登録してください
               </p>
+            )}
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {/* ===== 画面表示用（印刷時は非表示） ===== */}
+      <div className="min-h-screen bg-gray-50 print:hidden">
+        <header className="bg-white border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4 py-4 flex items-center gap-4">
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors active:scale-95"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <h1 className="text-2xl font-bold text-gray-900">QR コード</h1>
+          </div>
+        </header>
+
+        <main className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+          {/* QRコード表示 */}
+          <div className="bg-white rounded-xl shadow p-8 text-center space-y-4">
+            <h2 className="text-lg font-bold text-gray-900">{clinic.name}</h2>
+            <p className="text-sm text-gray-500">患者様向け口コミ収集用QRコード</p>
+
+            <div className="flex justify-center py-4">
+              <QRCodeCanvas value={reviewUrl} size={240} level="H" includeMargin />
             </div>
 
-            {/* Google Maps URL 入力 */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Google Maps URL
-              </label>
-              <p className="text-xs text-gray-500 mb-2">
-                クリニックの Google Maps ページの URL を入力してください
-              </p>
+            {/* URL表示 + コピー */}
+            <div className="flex gap-2">
               <input
-                type="url"
-                value={googleMapsUrl}
-                onChange={(e) => setGoogleMapsUrl(e.target.value)}
-                placeholder="https://maps.google.com/?cid=..."
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                type="text"
+                value={reviewUrl}
+                readOnly
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-xs text-gray-600"
               />
+              <button
+                onClick={handleCopy}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all active:scale-95 ${
+                  copied
+                    ? 'bg-green-500 text-white'
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
+              >
+                {copied ? 'コピーしました!' : 'コピー'}
+              </button>
             </div>
+          </div>
 
-            {/* エラーメッセージ */}
-            {error && (
-              <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                {error}
-              </div>
-            )}
+          {/* アクションボタン */}
+          <div className="space-y-3">
+            <button
+              onClick={handlePrint}
+              className="w-full py-3 px-4 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors active:scale-[0.98] flex items-center justify-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+              </svg>
+              印刷用ポスターを表示
+            </button>
 
-            {/* QR コード表示 */}
-            {qrUrl && (
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-4">
-                    QR コード
-                  </p>
-                  <QRCodeDisplay url={qrUrl} />
-                </div>
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="w-full py-3 px-4 bg-gray-200 text-gray-700 rounded-xl font-medium hover:bg-gray-300 transition-colors active:scale-[0.98]"
+            >
+              ダッシュボードに戻る
+            </button>
+          </div>
+        </main>
+      </div>
 
-                {/* URL 表示 */}
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">
-                    評価ページのURL
-                  </p>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={qrUrl}
-                      readOnly
-                      className="flex-1 px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm"
-                    />
-                    <button
-                      onClick={() => {
-                        navigator.clipboard.writeText(qrUrl);
-                        // TODO: トースト通知
-                      }}
-                      className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium"
-                    >
-                      コピー
-                    </button>
-                  </div>
-                </div>
+      {/* ===== 印刷用ポスター（画面では非表示、印刷時のみ表示） ===== */}
+      <div ref={printRef} className="hidden print:block">
+        <style dangerouslySetInnerHTML={{ __html: `
+          @media print {
+            @page {
+              size: A4;
+              margin: 0;
+            }
+            body {
+              margin: 0;
+              padding: 0;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+          }
+        `}} />
+        <div style={{
+          width: '210mm',
+          minHeight: '297mm',
+          padding: '20mm',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontFamily: '"Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif',
+        }}>
+          {/* クリニック名 */}
+          <div style={{
+            fontSize: '28px',
+            fontWeight: 'bold',
+            color: '#1e40af',
+            marginBottom: '12px',
+            textAlign: 'center',
+          }}>
+            {clinic.name}
+          </div>
 
-                {/* 印刷ボタン */}
-                <button
-                  onClick={handlePrintPDF}
-                  className="w-full py-2 px-4 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
-                >
-                  印刷用PDFを生成
-                </button>
-              </div>
-            )}
+          {/* メインメッセージ */}
+          <div style={{
+            fontSize: '42px',
+            fontWeight: 'bold',
+            color: '#111827',
+            marginBottom: '8px',
+            textAlign: 'center',
+            lineHeight: '1.3',
+          }}>
+            口コミのご協力を
+          </div>
+          <div style={{
+            fontSize: '42px',
+            fontWeight: 'bold',
+            color: '#111827',
+            marginBottom: '32px',
+            textAlign: 'center',
+            lineHeight: '1.3',
+          }}>
+            お願いいたします
+          </div>
 
-            {/* 生成ボタン */}
-            {!qrUrl && (
-              <button
-                onClick={handleGenerateQR}
-                disabled={!googleMapsUrl || isLoading}
-                className="w-full py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {isLoading ? '生成中...' : 'QR コードを生成'}
-              </button>
-            )}
+          {/* 説明テキスト */}
+          <div style={{
+            fontSize: '16px',
+            color: '#6b7280',
+            marginBottom: '32px',
+            textAlign: 'center',
+            lineHeight: '1.6',
+          }}>
+            下のQRコードをスマートフォンで<br />
+            読み取ってください
+          </div>
 
-            {/* リセットボタン */}
-            {qrUrl && (
-              <button
-                onClick={() => {
-                  setQrUrl(null);
-                  setGoogleMapsUrl('');
-                }}
-                className="w-full py-2 px-4 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors"
-              >
-                リセット
-              </button>
-            )}
+          {/* QRコード */}
+          <div style={{
+            padding: '24px',
+            border: '3px solid #e5e7eb',
+            borderRadius: '16px',
+            marginBottom: '32px',
+            background: '#ffffff',
+          }}>
+            <QRCodeCanvas value={reviewUrl} size={220} level="H" includeMargin />
+          </div>
+
+          {/* 星のイメージ */}
+          <div style={{
+            fontSize: '40px',
+            marginBottom: '16px',
+            letterSpacing: '4px',
+          }}>
+            ★★★★★
+          </div>
+
+          {/* サブメッセージ */}
+          <div style={{
+            fontSize: '15px',
+            color: '#9ca3af',
+            textAlign: 'center',
+            lineHeight: '1.6',
+          }}>
+            皆様のお声が私たちの励みになります<br />
+            ご協力ありがとうございます
+          </div>
+
+          {/* フッター */}
+          <div style={{
+            marginTop: '40px',
+            fontSize: '11px',
+            color: '#d1d5db',
+          }}>
+            Powered by クチコミ先生
           </div>
         </div>
-      </main>
-    </div>
+      </div>
+    </>
   );
 }

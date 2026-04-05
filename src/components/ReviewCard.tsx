@@ -44,9 +44,12 @@ export function ReviewCard({ review, onAiReplyGenerated }: ReviewCardProps) {
     }
   };
 
-  const handleCopyReply = (content: string) => {
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCopyReply = (content: string, replyId: string) => {
     navigator.clipboard.writeText(content);
-    // TODO: トースト通知
+    setCopiedId(replyId);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
   const publishedDate = new Date(review.published_at).toLocaleDateString('ja-JP', {
@@ -120,10 +123,14 @@ export function ReviewCard({ review, onAiReplyGenerated }: ReviewCardProps) {
                   {reply.tone === 'concise' && '簡潔'}
                 </span>
                 <button
-                  onClick={() => handleCopyReply(reply.content)}
-                  className="text-xs font-medium text-blue-600 hover:text-blue-800 px-2 py-1 rounded hover:bg-blue-50 transition-colors"
+                  onClick={() => handleCopyReply(reply.content, reply.id)}
+                  className={`text-xs font-medium px-2 py-1 rounded transition-all active:scale-95 ${
+                    copiedId === reply.id
+                      ? 'bg-green-100 text-green-700'
+                      : 'text-blue-600 hover:text-blue-800 hover:bg-blue-50'
+                  }`}
                 >
-                  コピー
+                  {copiedId === reply.id ? 'コピーしました!' : 'コピー'}
                 </button>
               </div>
               <p className="text-sm text-gray-700 mb-2">{reply.content}</p>
@@ -154,9 +161,17 @@ export function ReviewCard({ review, onAiReplyGenerated }: ReviewCardProps) {
         <button
           onClick={handleGenerateReplies}
           disabled={isGenerating}
-          className="w-full py-2 px-4 bg-blue-600 text-white rounded font-medium text-sm hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+          className="w-full py-2 px-4 bg-blue-600 text-white rounded font-medium text-sm hover:bg-blue-700 transition-all active:scale-[0.98] disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
-          {isGenerating ? 'AI返信を生成中...' : 'AI返信を生成'}
+          {isGenerating ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+              AI返信を生成中...
+            </span>
+          ) : 'AI返信を生成'}
         </button>
       )}
     </div>
