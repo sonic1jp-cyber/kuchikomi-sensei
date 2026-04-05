@@ -23,15 +23,15 @@ export default function LoginPage() {
       const supabase = createClient();
 
       if (isSignUp) {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/api/auth/callback`,
-          },
         });
         if (error) {
           setError(error.message);
+        } else if (data.session) {
+          // メール確認不要の場合、即座にダッシュボードへ
+          router.push('/dashboard');
         } else {
           setSuccess('確認メールを送信しました。メールのリンクをクリックして登録を完了してください。');
         }
