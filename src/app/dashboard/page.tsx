@@ -130,5 +130,7 @@ export default async function DashboardPage() {
     redirect('/clinic/setup');
   }
 
-  return <DashboardClient clinic={clinic} initialReviews={reviews} stats={stats} />;
+  const isGoogleConnected = !!clinic.google_refresh_token;
+
+  return <DashboardClient clinic={clinic} initialReviews={reviews} stats={stats} isGoogleConnected={isGoogleConnected} />;
 }

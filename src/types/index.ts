@@ -6,9 +6,15 @@ export interface Clinic {
   name: string;
   google_place_id: string | null;
   google_maps_url: string | null;
+  google_review_url: string | null;
   department: string;
   address: string;
   logo_url: string | null;
+  google_access_token: string | null;
+  google_refresh_token: string | null;
+  google_token_expires_at: string | null;
+  google_account_id: string | null;
+  google_location_id: string | null;
   created_at: string;
   updated_at: string;
 }
