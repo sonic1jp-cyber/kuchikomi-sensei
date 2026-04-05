@@ -3,30 +3,16 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase';
-
-// Note: 実際の実装では react-qr-code ライブラリを使用
-// npm install qrcode.react
+import { QRCodeCanvas } from 'qrcode.react';
 
 interface QRCodeDisplayProps {
   url: string;
 }
 
 function QRCodeDisplay({ url }: QRCodeDisplayProps) {
-  // プレースホルダー実装
-  // 実装時に react-qr-code を使用してください
   return (
-    <div className="bg-white p-8 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center">
-      <div className="text-center">
-        <p className="text-gray-500 text-sm mb-4">
-          QR コード表示エリア
-        </p>
-        <code className="text-xs text-gray-400 block break-all max-w-md">
-          {url}
-        </code>
-        <p className="text-xs text-gray-400 mt-2">
-          ※ react-qr-code ライブラリをインストール後に有効
-        </p>
-      </div>
+    <div className="bg-white p-8 rounded-lg border-2 border-gray-200 flex items-center justify-center">
+      <QRCodeCanvas value={url} size={256} level="H" includeMargin />
     </div>
   );
 }
@@ -43,9 +29,17 @@ export default function QRCodePage() {
       setIsLoading(true);
       setError(null);
 
-      // Google Maps URL のバリデーション
-      if (!googleMapsUrl.includes('maps.google.com') && !googleMapsUrl.includes('goo.gl')) {
-        setError('有効な Google Maps URL を入力してください');
+      // Google Maps URL のバリデーション（google.co.jp/maps, maps.app.goo.gl 等も許可）
+      const isValidGoogleMapsUrl =
+        googleMapsUrl.includes('google.com/maps') ||
+        googleMapsUrl.includes('google.co.jp/maps') ||
+        googleMapsUrl.includes('maps.google.com') ||
+        googleMapsUrl.includes('maps.google.co.jp') ||
+        googleMapsUrl.includes('goo.gl/maps') ||
+        googleMapsUrl.includes('maps.app.goo.gl');
+
+      if (!isValidGoogleMapsUrl) {
+        setError('有効な Google Maps URL を入力してください（例: https://www.google.co.jp/maps/...）');
         return;
       }
 
